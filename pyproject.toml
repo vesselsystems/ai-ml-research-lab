@@ -9,7 +9,6 @@ description = "Reproducible churn modeling experiments with responsible evaluati
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-  "joblib>=1.3.0",
   "pandas>=2.2.0",
   "scikit-learn>=1.5.0",
 ]

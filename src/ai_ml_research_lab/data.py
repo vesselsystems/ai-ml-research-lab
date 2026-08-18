@@ -8,8 +8,8 @@ from urllib.request import urlopen
 import pandas as pd
 
 DATA_URL = (
-    "https://raw.githubusercontent.com/IBM/telco-customer-churn-on-icp4d/master/data/"
-    "Telco-Customer-Churn.csv"
+    "https://raw.githubusercontent.com/IBM/telco-customer-churn-on-icp4d/"
+    "d5371f5d83a446ad5673cbcca3b814b926491f8a/data/Telco-Customer-Churn.csv"
 )
 TARGET = "Churn"
 ID_COLUMN = "customerID"

@@ -1,23 +1,32 @@
-# AI/ML Research Lab: Churn Prediction and Responsible Evaluation
+# Churn prediction: an evidence-first comparison
 
-A reproducible research-style ML project following the AI Career Training Plan's second project:
+[![CI](https://github.com/vesselsystems/ai-ml-research-lab/actions/workflows/ci.yml/badge.svg)](https://github.com/vesselsystems/ai-ml-research-lab/actions/workflows/ci.yml)
 
-> Predictive model (churn, fraud, or demand) with a full write-up.
+This repository asks a narrow question: on the IBM Telco Customer Churn CSV, does a random forest rank churn cases better than a regularized logistic-regression model? It also includes a majority-class reference and a held-out threshold table so that ranking metrics are not mistaken for an operating decision.
 
-The project compares a regularized logistic-regression baseline with a random-forest model on a public telecom churn dataset. It emphasizes experimental discipline rather than leaderboard chasing: a fixed split, stratified cross-validation, multiple metrics, a leakage review, and a model-card-style limitations section.
+The result is an offline experiment. It does not estimate the effect of a retention action, test an intervention, or support decisions about individual customers.
 
-## Research questions
+## Current result
 
-1. Does a nonlinear tree ensemble improve ranking performance over a transparent linear baseline?
-2. How do model choices change precision, recall, and F1 on an imbalanced target?
-3. Which data-quality and governance decisions must be documented before a churn score could be used responsibly?
+The current run used seed 42, a stratified 80/20 split, and five-fold stratified cross-validation on the training rows. Values below are from the 1,409-row holdout; the positive rate in that holdout is 26.54%.
 
-## Quick start
+| Model | ROC-AUC | 95% bootstrap interval | Average precision | Precision | Recall | F1 | Accuracy |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Majority class | 0.5000 | 0.5000–0.5000 | 0.2654 | 0.0000 | 0.0000 | 0.0000 | 0.7346 |
+| Logistic regression | 0.8413 | 0.8181–0.8629 | 0.6326 | 0.5043 | 0.7834 | 0.6136 | 0.7381 |
+| Random forest | 0.8366 | 0.8123–0.8586 | 0.6445 | 0.5621 | 0.6898 | 0.6194 | 0.7750 |
+
+The logistic model has the higher holdout ROC-AUC, while the forest has slightly higher average precision, F1, precision, and accuracy at threshold 0.5. The ROC-AUC intervals overlap, and this single split does not establish a generally superior model. The complete table is in `reports/first_run.md`; the threshold counts are in `reports/threshold_analysis.csv` after running the experiment.
+
+## Run it from a clean clone
+
+The raw CSV is intentionally ignored by Git. Download it before running the data-dependent experiment; CI runs only the tests and does not need the CSV.
 
 ```bash
 python -m venv .venv
 # Windows PowerShell
 .venv\Scripts\Activate.ps1
+# macOS/Linux: use `source .venv/bin/activate` instead
 python -m pip install --upgrade pip
 python -m pip install -e ".[dev]"
 python scripts/download_data.py
@@ -26,41 +35,22 @@ pytest
 ruff check .
 ```
 
-Outputs are written to `reports/` and are intentionally reproducible with the configured random seed.
+`run_experiment.py` writes `model_comparison.csv`, `metrics.json`, and `threshold_analysis.csv` under `reports/`. The first two are generated files ignored by Git. The threshold report records fixed thresholds (0.2 through 0.7) for the same holdout used in the summary; it is descriptive, not a threshold-selection procedure.
 
-## Method
+## Data and method
 
-- Public dataset: IBM Telco Customer Churn CSV.
-- Target: `Churn` converted to a binary label.
-- Identifier: `customerID` is excluded from modeling.
-- Numeric fields: median imputation and standardization for the linear model.
-- Categorical fields: most-frequent imputation and one-hot encoding.
-- Evaluation: stratified train/test split plus 5-fold stratified cross-validation.
-- Metrics: ROC-AUC, average precision, precision, recall, F1, and accuracy.
-- Responsible-use review: leakage, missingness, class imbalance, proxy variables, calibration, and the fact that correlation is not a causal retention intervention.
+- **Source:** [IBM Telco Customer Churn CSV](https://raw.githubusercontent.com/IBM/telco-customer-churn-on-icp4d/d5371f5d83a446ad5673cbcca3b814b926491f8a/data/Telco-Customer-Churn.csv), pinned to commit `d5371f5d83a446ad5673cbcca3b814b926491f8a`, 7,043 rows in the current local file.
+- **Label:** `Churn=Yes` is 1 and `Churn=No` is 0; the full-file positive rate is 26.54%.
+- **Features:** `customerID` is removed. Numeric values use median imputation and scaling; categorical values use most-frequent imputation and one-hot encoding. `TotalCharges` is parsed as numeric, with blank values becoming missing values for imputation.
+- **Candidates:** a majority-class `DummyClassifier`, class-weighted logistic regression, and a class-weighted random forest. The majority classifier is a reference point, not a useful churn scorer.
+- **Evaluation:** the preprocessing is fitted inside each pipeline. The holdout is used once for the reported comparison; cross-validation is run on the training rows. Metrics are ROC-AUC, average precision, precision, recall, F1, and accuracy. Held-out ROC-AUC intervals are percentile intervals from 500 bootstrap resamples.
 
-## Repository structure
+The full protocol, including controls and interpretation boundaries, is in [`reports/experiment_protocol.md`](reports/experiment_protocol.md). The model card is in [`reports/model_card.md`](reports/model_card.md). [`docs/methodology.md`](docs/methodology.md) explains the design in more detail.
 
-```text
-.
-├── docs/methodology.md
-├── reports/experiment_protocol.md
-├── scripts/
-│   ├── download_data.py
-│   └── run_experiment.py
-├── src/ai_ml_research_lab/
-│   ├── data.py
-│   └── experiment.py
-└── tests/
-```
+## Scope and limitations
 
-## Portfolio deliverable
+The source records describe historical churn labels, not whether any particular outreach would have changed an outcome. Contract, payment, tenure, demographic, and service fields may encode unequal access or act as proxies for protected characteristics. The experiment does not include subgroup performance, calibration assessment, privacy or legal review, drift checks, or an intervention study. Those omissions are reasons not to use these scores for customer treatment, eligibility, denial, or prioritization without separate evidence and review.
 
-The finished repository should contain:
+## License
 
-- a model comparison table
-- a short research note explaining the question, design, results, and limitations
-- a model card describing intended use, non-use, data, metrics, and risks
-- reproducible commands and tests
-
-This is a portfolio study, not a production retention system. A real deployment would require stakeholder review, consent/legal review, drift monitoring, calibration, and an intervention policy that is tested separately from prediction quality.
+The code and documentation are released under the [MIT License](LICENSE). The source dataset remains subject to its publisher's terms.

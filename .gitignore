@@ -11,6 +11,7 @@ data/raw/*
 models/
 reports/*.json
 reports/*.csv
+!reports/threshold_analysis.csv
 reports/*.joblib
 
 .DS_Store

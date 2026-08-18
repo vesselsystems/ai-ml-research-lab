@@ -7,13 +7,16 @@ from typing import Any
 import numpy as np
 import pandas as pd
 from sklearn.compose import ColumnTransformer
+from sklearn.dummy import DummyClassifier
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import (
     accuracy_score,
     average_precision_score,
+    confusion_matrix,
     f1_score,
+    make_scorer,
     precision_score,
     recall_score,
     roc_auc_score,
@@ -23,7 +26,7 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
 RANDOM_STATE = 42
-
+DEFAULT_THRESHOLDS = (0.2, 0.3, 0.4, 0.5, 0.6, 0.7)
 
 
 def build_preprocessor(features: pd.DataFrame) -> ColumnTransformer:
@@ -66,8 +69,11 @@ def build_pipelines(
     random_state: int = RANDOM_STATE,
     forest_estimators: int = 200,
 ) -> dict[str, Pipeline]:
-    """Return the transparent baseline and the nonlinear comparison model."""
+    """Return the majority reference, transparent baseline, and comparison model."""
     return {
+        "majority_class": Pipeline(
+            [("model", DummyClassifier(strategy="most_frequent"))]
+        ),
         "logistic_regression": Pipeline(
             [
                 ("preprocess", build_preprocessor(features)),
@@ -139,6 +145,24 @@ def _metrics(
     }
 
 
+def _holdout_split(
+    frame: pd.DataFrame,
+    test_size: float,
+    random_state: int,
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series]:
+    """Create the single holdout split shared by the summary and threshold report."""
+    from .data import split_features_target
+
+    features, target = split_features_target(frame)
+    return train_test_split(
+        features,
+        target,
+        test_size=test_size,
+        stratify=target,
+        random_state=random_state,
+    )
+
+
 def run_experiments(
     frame: pd.DataFrame,
     random_state: int = RANDOM_STATE,
@@ -147,23 +171,19 @@ def run_experiments(
     forest_estimators: int = 200,
 ) -> tuple[pd.DataFrame, dict[str, Pipeline]]:
     """Fit each candidate and return a comparable test/CV summary plus fitted models."""
-    from .data import split_features_target
-
-    features, target = split_features_target(frame)
-    x_train, x_test, y_train, y_test = train_test_split(
-        features,
-        target,
+    x_train, x_test, y_train, y_test = _holdout_split(
+        frame,
         test_size=test_size,
-        stratify=target,
         random_state=random_state,
     )
+    test_positive_rate = float(y_test.mean())
     cv = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=random_state)
     scoring = {
         "roc_auc": "roc_auc",
         "average_precision": "average_precision",
-        "f1": "f1",
-        "precision": "precision",
-        "recall": "recall",
+        "f1": make_scorer(f1_score, zero_division=0),
+        "precision": make_scorer(precision_score, zero_division=0),
+        "recall": make_scorer(recall_score, zero_division=0),
     }
 
     fitted: dict[str, Pipeline] = {}
@@ -188,7 +208,7 @@ def run_experiments(
             {
                 "model": name,
                 "test_rows": len(y_test),
-                "positive_rate": float(target.mean()),
+                "test_positive_rate": test_positive_rate,
                 **{f"test_{key}": value for key, value in test_metrics.items()},
                 "test_roc_auc_ci_low": auc_low,
                 "test_roc_auc_ci_high": auc_high,
@@ -204,3 +224,103 @@ def run_experiments(
         )
 
     return pd.DataFrame(rows).sort_values("test_roc_auc", ascending=False), fitted
+
+
+def threshold_analysis(
+    y_true: pd.Series,
+    probabilities: np.ndarray,
+    thresholds: tuple[float, ...] = DEFAULT_THRESHOLDS,
+) -> pd.DataFrame:
+    """Describe precision/recall tradeoffs at fixed probability thresholds."""
+    y_array = np.asarray(y_true)
+    score_array = np.asarray(probabilities)
+    threshold_array = np.asarray(thresholds, dtype=float)
+
+    if y_array.ndim != 1 or score_array.ndim != 1:
+        raise ValueError("y_true and probabilities must be one-dimensional")
+    if len(y_array) != len(score_array):
+        raise ValueError("y_true and probabilities must have the same length")
+    if len(y_array) == 0:
+        raise ValueError("y_true and probabilities cannot be empty")
+    if not np.isin(y_array, [0, 1]).all():
+        raise ValueError("y_true must contain only 0 and 1")
+    if not np.isfinite(score_array).all():
+        raise ValueError("probabilities must be finite")
+    if ((score_array < 0) | (score_array > 1)).any():
+        raise ValueError("probabilities must be between 0 and 1")
+    if not np.isfinite(threshold_array).all():
+        raise ValueError("thresholds must be finite")
+    if ((threshold_array < 0) | (threshold_array > 1)).any():
+        raise ValueError("thresholds must be between 0 and 1")
+
+    columns = [
+        "threshold",
+        "rows",
+        "actual_positive_rate",
+        "predicted_positive_count",
+        "predicted_positive_rate",
+        "true_positive",
+        "false_positive",
+        "false_negative",
+        "true_negative",
+        "precision",
+        "recall",
+        "f1",
+    ]
+    rows: list[dict[str, float | int]] = []
+    for threshold in threshold_array:
+        predictions = (score_array >= threshold).astype(int)
+        true_negative, false_positive, false_negative, true_positive = confusion_matrix(
+            y_array,
+            predictions,
+            labels=[0, 1],
+        ).ravel()
+        rows.append(
+            {
+                "threshold": float(threshold),
+                "rows": int(len(y_array)),
+                "actual_positive_rate": float(np.mean(y_array)),
+                "predicted_positive_count": int(predictions.sum()),
+                "predicted_positive_rate": float(predictions.mean()),
+                "true_positive": int(true_positive),
+                "false_positive": int(false_positive),
+                "false_negative": int(false_negative),
+                "true_negative": int(true_negative),
+                "precision": float(
+                    precision_score(y_array, predictions, zero_division=0)
+                ),
+                "recall": float(recall_score(y_array, predictions, zero_division=0)),
+                "f1": float(f1_score(y_array, predictions, zero_division=0)),
+            }
+        )
+    return pd.DataFrame(rows, columns=columns)
+
+
+def run_threshold_analysis(
+    frame: pd.DataFrame,
+    fitted: dict[str, Pipeline],
+    random_state: int = RANDOM_STATE,
+    test_size: float = 0.2,
+    thresholds: tuple[float, ...] = DEFAULT_THRESHOLDS,
+) -> pd.DataFrame:
+    """Apply fixed thresholds to the same held-out rows used in the summary."""
+    _, x_test, _, y_test = _holdout_split(
+        frame,
+        test_size=test_size,
+        random_state=random_state,
+    )
+    reports: list[pd.DataFrame] = []
+    for name, pipeline in fitted.items():
+        probabilities = pipeline.predict_proba(x_test)[:, 1]
+        report = threshold_analysis(y_test, probabilities, thresholds=thresholds)
+        report.insert(0, "model", name)
+        reports.append(report)
+
+    if not reports:
+        empty_columns = threshold_analysis(
+            y_test,
+            np.zeros(len(y_test)),
+            thresholds,
+        ).columns
+        return pd.DataFrame(columns=["model", *empty_columns])
+    return pd.concat(reports, ignore_index=True)
