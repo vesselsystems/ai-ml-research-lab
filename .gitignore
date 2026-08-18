@@ -1,0 +1,19 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.pytest_cache/
+.ruff_cache/
+
+# Downloaded source data and trained artifacts
+data/raw/*
+!data/raw/.gitkeep
+models/
+reports/*.json
+reports/*.csv
+reports/*.joblib
+
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
