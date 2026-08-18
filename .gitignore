@@ -12,6 +12,8 @@ models/
 reports/*.json
 reports/*.csv
 !reports/threshold_analysis.csv
+!reports/calibration_analysis.csv
+!reports/error_analysis.csv
 reports/*.joblib
 
 .DS_Store

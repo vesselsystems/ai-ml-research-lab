@@ -26,9 +26,9 @@ Every learned preprocessing step is inside the candidate's scikit-learn `Pipelin
 
 ## Measures and uncertainty
 
-ROC-AUC measures ranking across thresholds. Average precision describes ranking with the positive-class prevalence in mind. Precision, recall, F1, and accuracy use the model's default 0.5 probability threshold. The holdout ROC-AUC interval is a 2.5th–97.5th percentile interval from 500 bootstrap resamples. It describes sampling variation in these holdout rows; it is not a forecast interval and does not cover population shift.
+ROC-AUC measures ranking across thresholds. Average precision describes ranking with the positive-class prevalence in mind. Brier score and log loss assess probabilistic predictions, while the calibration artifact additionally reports observed-versus-predicted gaps in ten equal-width bins. Precision, recall, F1, and accuracy use the model's default 0.5 probability threshold. The holdout ROC-AUC interval is a 2.5th–97.5th percentile interval from 500 bootstrap resamples. It describes sampling variation in these holdout rows; it is not a forecast interval and does not cover population shift.
 
-`reports/threshold_analysis.csv` reports counts and precision/recall/F1 at fixed thresholds from 0.2 to 0.7. It is a decision-useful view of the tradeoff between false positives and false negatives, not a claim that 0.5 or any other value is an appropriate operating threshold. A threshold used outside this analysis would need to be fixed using a validation process and an explicit, reviewed cost or intervention policy.
+`reports/threshold_analysis.csv` reports counts and precision/recall/F1 at fixed thresholds from 0.2 to 0.7. `reports/calibration_analysis.csv` assesses the same holdout without fitting a recalibration model. `reports/error_analysis.csv` decomposes threshold-0.5 confusion counts by score band. These artifacts are descriptive views, not claims that 0.5 or any other value is an appropriate operating threshold. No business action or costs are supplied. If a future action is reviewed, its owner must provide eligibility, capacity, and false-positive/false-negative costs; threshold selection must happen on training/validation data or a separate decision set, with the holdout reserved for confirmation. The exported counts can then be combined with supplied costs, but this repository does not invent a cost matrix or business impact.
 
 ## Reproduction and controls
 
@@ -42,8 +42,8 @@ pytest
 ruff check .
 ```
 
-The download is separate because the raw CSV is ignored. CI runs the tests with a small in-memory fixture and does not require network access or ignored data. The experiment script fails with a clear instruction when the CSV has not been downloaded. The seed, split, model settings, source URL, and generated artifacts are recorded in `reports/experiment_protocol.md`.
+The download is separate because the raw CSV is ignored. CI runs the tests with a small in-memory fixture and does not require network access or ignored data. The experiment script fails with a clear instruction when the CSV has not been downloaded. The seed, split, model settings, source URL, calibration binning, error-analysis threshold, and generated artifacts are recorded in `reports/experiment_protocol.md`.
 
 ## Interpretation boundaries
 
-The results can support a cautious comparison of these model families on this file. They cannot support a claim that one model is universally better, that a score is calibrated for a particular action, that a feature causes churn, or that an intervention would improve retention. The dataset includes contract, payment, tenure, demographic, and service fields that may be proxies for protected characteristics. No subgroup, fairness, calibration, privacy/legal, drift, or intervention evaluation is included in this study.
+The results can support a cautious comparison of these model families on this file. The holdout calibration and score-band error reports are useful diagnostics, but they cannot support a claim that a score is calibrated for a particular action, that one model is universally better, that a feature causes churn, or that an intervention would improve retention. The dataset includes contract, payment, tenure, demographic, and service fields that may be proxies for protected characteristics. No subgroup or fairness result is claimed, and no defensible time-based validation or drift result is available in this study. Privacy/legal review and intervention evaluation are also not included.

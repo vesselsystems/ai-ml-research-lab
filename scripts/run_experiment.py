@@ -6,7 +6,12 @@ import json
 from pathlib import Path
 
 from ai_ml_research_lab.data import load_dataset
-from ai_ml_research_lab.experiment import run_experiments, run_threshold_analysis
+from ai_ml_research_lab.experiment import (
+    run_calibration_analysis,
+    run_error_analysis,
+    run_experiments,
+    run_threshold_analysis,
+)
 
 if __name__ == "__main__":
     root = Path(__file__).parents[1]
@@ -22,11 +27,15 @@ if __name__ == "__main__":
     frame = load_dataset(source)
     summary, fitted = run_experiments(frame)
     threshold_report = run_threshold_analysis(frame, fitted)
+    calibration_report = run_calibration_analysis(frame, fitted)
+    error_report = run_error_analysis(frame, fitted)
     summary.to_csv(report_dir / "model_comparison.csv", index=False)
     threshold_report.to_csv(report_dir / "threshold_analysis.csv", index=False)
+    calibration_report.to_csv(report_dir / "calibration_analysis.csv", index=False)
+    error_report.to_csv(report_dir / "error_analysis.csv", index=False)
     (report_dir / "metrics.json").write_text(
         json.dumps(summary.to_dict(orient="records"), indent=2),
         encoding="utf-8",
     )
     print(summary.to_string(index=False))
-    print(f"\nWrote model and threshold reports to {report_dir}")
+    print(f"\nWrote model, threshold, calibration, and error reports to {report_dir}")

@@ -14,8 +14,10 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import (
     accuracy_score,
     average_precision_score,
+    brier_score_loss,
     confusion_matrix,
     f1_score,
+    log_loss,
     make_scorer,
     precision_score,
     recall_score,
@@ -27,6 +29,8 @@ from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
 RANDOM_STATE = 42
 DEFAULT_THRESHOLDS = (0.2, 0.3, 0.4, 0.5, 0.6, 0.7)
+REPORTING_THRESHOLD = 0.5
+DEFAULT_CALIBRATION_BINS = 10
 
 
 def build_preprocessor(features: pd.DataFrame) -> ColumnTransformer:
@@ -130,6 +134,53 @@ def bootstrap_roc_auc_ci(
     return float(low), float(high)
 
 
+def _validate_binary_scores(
+    y_true: pd.Series | np.ndarray,
+    probabilities: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Validate and normalize binary labels and probability scores."""
+    y_array = np.asarray(y_true)
+    try:
+        score_array = np.asarray(probabilities, dtype=float)
+    except (TypeError, ValueError) as error:
+        raise ValueError("probabilities must be numeric") from error
+
+    if y_array.ndim != 1 or score_array.ndim != 1:
+        raise ValueError("y_true and probabilities must be one-dimensional")
+    if len(y_array) != len(score_array):
+        raise ValueError("y_true and probabilities must have the same length")
+    if len(y_array) == 0:
+        raise ValueError("y_true and probabilities cannot be empty")
+    if not np.isin(y_array, [0, 1]).all():
+        raise ValueError("y_true must contain only 0 and 1")
+    if not np.isfinite(score_array).all():
+        raise ValueError("probabilities must be finite")
+    if ((score_array < 0) | (score_array > 1)).any():
+        raise ValueError("probabilities must be between 0 and 1")
+    return y_array.astype("int64"), score_array
+
+
+def _validate_bin_count(n_bins: int) -> int:
+    """Validate the number of fixed probability bins used in reports."""
+    if not isinstance(n_bins, (int, np.integer)) or isinstance(n_bins, bool) or n_bins < 2:
+        raise ValueError("n_bins must be an integer greater than or equal to 2")
+    return int(n_bins)
+
+
+def _score_bin_indices(probabilities: np.ndarray, n_bins: int) -> np.ndarray:
+    """Assign scores to equal-width bins, including 1.0 in the final bin."""
+    edges = np.linspace(0.0, 1.0, n_bins + 1)
+    indices = np.searchsorted(edges, probabilities, side="right") - 1
+    return np.clip(indices, 0, n_bins - 1)
+
+
+def _safe_rate(numerator: int, denominator: int) -> float:
+    """Return a rate or NaN when the requested denominator is absent."""
+    if denominator == 0:
+        return float("nan")
+    return float(numerator / denominator)
+
+
 def _metrics(
     y_true: pd.Series,
     predictions: np.ndarray,
@@ -138,7 +189,9 @@ def _metrics(
     return {
         "accuracy": float(accuracy_score(y_true, predictions)),
         "average_precision": float(average_precision_score(y_true, probabilities)),
+        "brier_score": float(brier_score_loss(y_true, probabilities)),
         "f1": float(f1_score(y_true, predictions, zero_division=0)),
+        "log_loss": float(log_loss(y_true, probabilities, labels=[0, 1])),
         "precision": float(precision_score(y_true, predictions, zero_division=0)),
         "recall": float(recall_score(y_true, predictions, zero_division=0)),
         "roc_auc": float(roc_auc_score(y_true, probabilities)),
@@ -232,22 +285,13 @@ def threshold_analysis(
     thresholds: tuple[float, ...] = DEFAULT_THRESHOLDS,
 ) -> pd.DataFrame:
     """Describe precision/recall tradeoffs at fixed probability thresholds."""
-    y_array = np.asarray(y_true)
-    score_array = np.asarray(probabilities)
-    threshold_array = np.asarray(thresholds, dtype=float)
-
-    if y_array.ndim != 1 or score_array.ndim != 1:
-        raise ValueError("y_true and probabilities must be one-dimensional")
-    if len(y_array) != len(score_array):
-        raise ValueError("y_true and probabilities must have the same length")
-    if len(y_array) == 0:
-        raise ValueError("y_true and probabilities cannot be empty")
-    if not np.isin(y_array, [0, 1]).all():
-        raise ValueError("y_true must contain only 0 and 1")
-    if not np.isfinite(score_array).all():
-        raise ValueError("probabilities must be finite")
-    if ((score_array < 0) | (score_array > 1)).any():
-        raise ValueError("probabilities must be between 0 and 1")
+    y_array, score_array = _validate_binary_scores(y_true, probabilities)
+    try:
+        threshold_array = np.asarray(thresholds, dtype=float)
+    except (TypeError, ValueError) as error:
+        raise ValueError("thresholds must be numeric") from error
+    if threshold_array.ndim != 1:
+        raise ValueError("thresholds must be one-dimensional")
     if not np.isfinite(threshold_array).all():
         raise ValueError("thresholds must be finite")
     if ((threshold_array < 0) | (threshold_array > 1)).any():
@@ -294,6 +338,255 @@ def threshold_analysis(
             }
         )
     return pd.DataFrame(rows, columns=columns)
+
+
+def calibration_analysis(
+    y_true: pd.Series | np.ndarray,
+    probabilities: np.ndarray,
+    n_bins: int = DEFAULT_CALIBRATION_BINS,
+) -> pd.DataFrame:
+    """Measure holdout calibration in fixed, equal-width probability bins.
+
+    The function does not fit or adjust a calibration model.  It reports the
+    observed positive rate and mean predicted probability in each bin, along
+    with aggregate Brier, log-loss, expected calibration error (ECE), and
+    maximum absolute bin gap.  Empty bins are retained so the artifact has a
+    stable schema across runs.
+    """
+    n_bins = _validate_bin_count(n_bins)
+    y_array, score_array = _validate_binary_scores(y_true, probabilities)
+    bin_indices = _score_bin_indices(score_array, n_bins)
+    edges = np.linspace(0.0, 1.0, n_bins + 1)
+
+    brier = float(brier_score_loss(y_array, score_array))
+    score_log_loss = float(log_loss(y_array, score_array, labels=[0, 1]))
+    nonempty_gaps: list[tuple[int, float]] = []
+    for bin_index in range(n_bins):
+        mask = bin_indices == bin_index
+        if mask.any():
+            mean_probability = float(score_array[mask].mean())
+            observed_rate = float(y_array[mask].mean())
+            nonempty_gaps.append(
+                (int(mask.sum()), abs(observed_rate - mean_probability))
+            )
+
+    expected_calibration_error = float(
+        sum(count * gap for count, gap in nonempty_gaps) / len(y_array)
+    )
+    max_calibration_error = float(max(gap for _, gap in nonempty_gaps))
+
+    rows: list[dict[str, float | int]] = []
+    for bin_index in range(n_bins):
+        mask = bin_indices == bin_index
+        count = int(mask.sum())
+        if count:
+            mean_probability = float(score_array[mask].mean())
+            observed_rate = float(y_array[mask].mean())
+            calibration_gap = observed_rate - mean_probability
+            absolute_gap = abs(calibration_gap)
+        else:
+            mean_probability = float("nan")
+            observed_rate = float("nan")
+            calibration_gap = float("nan")
+            absolute_gap = float("nan")
+
+        rows.append(
+            {
+                "bin": bin_index,
+                "bin_lower": float(np.round(edges[bin_index], 12)),
+                "bin_upper": float(np.round(edges[bin_index + 1], 12)),
+                "rows": count,
+                "mean_predicted_probability": mean_probability,
+                "observed_positive_rate": observed_rate,
+                "calibration_gap": float(calibration_gap),
+                "absolute_calibration_gap": float(absolute_gap),
+                "expected_calibration_error": expected_calibration_error,
+                "max_calibration_error": max_calibration_error,
+                "brier_score": brier,
+                "log_loss": score_log_loss,
+            }
+        )
+
+    return pd.DataFrame(
+        rows,
+        columns=[
+            "bin",
+            "bin_lower",
+            "bin_upper",
+            "rows",
+            "mean_predicted_probability",
+            "observed_positive_rate",
+            "calibration_gap",
+            "absolute_calibration_gap",
+            "expected_calibration_error",
+            "max_calibration_error",
+            "brier_score",
+            "log_loss",
+        ],
+    )
+
+
+def error_analysis(
+    y_true: pd.Series | np.ndarray,
+    probabilities: np.ndarray,
+    threshold: float = REPORTING_THRESHOLD,
+    n_bins: int = DEFAULT_CALIBRATION_BINS,
+) -> pd.DataFrame:
+    """Break down holdout errors by predicted-probability band.
+
+    This aggregate report intentionally contains no identifiers or feature
+    values.  It makes false positives and false negatives inspectable across
+    fixed score bands without implying a subgroup, temporal, or causal claim.
+    """
+    n_bins = _validate_bin_count(n_bins)
+    y_array, score_array = _validate_binary_scores(y_true, probabilities)
+    try:
+        threshold_array = np.asarray(threshold, dtype=float)
+    except (TypeError, ValueError) as error:
+        raise ValueError("threshold must be numeric") from error
+    if threshold_array.ndim != 0:
+        raise ValueError("threshold must be a scalar")
+    threshold_value = float(threshold_array)
+    if not np.isfinite(threshold_value) or not 0 <= threshold_value <= 1:
+        raise ValueError("threshold must be between 0 and 1")
+
+    predictions = (score_array >= threshold_value).astype("int64")
+    bin_indices = _score_bin_indices(score_array, n_bins)
+    edges = np.linspace(0.0, 1.0, n_bins + 1)
+    rows: list[dict[str, float | int]] = []
+    for bin_index in range(n_bins):
+        mask = bin_indices == bin_index
+        count = int(mask.sum())
+        bin_y = y_array[mask]
+        bin_predictions = predictions[mask]
+        if count:
+            true_negative, false_positive, false_negative, true_positive = confusion_matrix(
+                bin_y,
+                bin_predictions,
+                labels=[0, 1],
+            ).ravel()
+        else:
+            true_negative = false_positive = false_negative = true_positive = 0
+        errors = int(false_positive + false_negative)
+        rows.append(
+            {
+                "threshold": threshold_value,
+                "score_bin": bin_index,
+                "bin_lower": float(np.round(edges[bin_index], 12)),
+                "bin_upper": float(np.round(edges[bin_index + 1], 12)),
+                "rows": count,
+                "mean_predicted_probability": (
+                    float(score_array[mask].mean()) if count else float("nan")
+                ),
+                "actual_positive_rate": _safe_rate(
+                    int(true_positive + false_negative), count
+                ),
+                "predicted_positive_rate": _safe_rate(
+                    int(true_positive + false_positive), count
+                ),
+                "true_positive": int(true_positive),
+                "false_positive": int(false_positive),
+                "false_negative": int(false_negative),
+                "true_negative": int(true_negative),
+                "errors": errors,
+                "error_rate": _safe_rate(errors, count),
+                "false_positive_rate": _safe_rate(
+                    int(false_positive), int(false_positive + true_negative)
+                ),
+                "false_negative_rate": _safe_rate(
+                    int(false_negative), int(false_negative + true_positive)
+                ),
+            }
+        )
+
+    return pd.DataFrame(
+        rows,
+        columns=[
+            "threshold",
+            "score_bin",
+            "bin_lower",
+            "bin_upper",
+            "rows",
+            "mean_predicted_probability",
+            "actual_positive_rate",
+            "predicted_positive_rate",
+            "true_positive",
+            "false_positive",
+            "false_negative",
+            "true_negative",
+            "errors",
+            "error_rate",
+            "false_positive_rate",
+            "false_negative_rate",
+        ],
+    )
+
+
+def run_calibration_analysis(
+    frame: pd.DataFrame,
+    fitted: dict[str, Pipeline],
+    random_state: int = RANDOM_STATE,
+    test_size: float = 0.2,
+    n_bins: int = DEFAULT_CALIBRATION_BINS,
+) -> pd.DataFrame:
+    """Apply fixed-bin calibration analysis to the shared holdout."""
+    _, x_test, _, y_test = _holdout_split(
+        frame,
+        test_size=test_size,
+        random_state=random_state,
+    )
+    reports: list[pd.DataFrame] = []
+    for name, pipeline in fitted.items():
+        probabilities = pipeline.predict_proba(x_test)[:, 1]
+        report = calibration_analysis(y_test, probabilities, n_bins=n_bins)
+        report.insert(0, "model", name)
+        reports.append(report)
+
+    if not reports:
+        empty = calibration_analysis(
+            y_test,
+            np.zeros(len(y_test)),
+            n_bins=n_bins,
+        )
+        return pd.DataFrame(columns=["model", *empty.columns])
+    return pd.concat(reports, ignore_index=True)
+
+
+def run_error_analysis(
+    frame: pd.DataFrame,
+    fitted: dict[str, Pipeline],
+    random_state: int = RANDOM_STATE,
+    test_size: float = 0.2,
+    threshold: float = REPORTING_THRESHOLD,
+    n_bins: int = DEFAULT_CALIBRATION_BINS,
+) -> pd.DataFrame:
+    """Apply score-band error analysis to the shared holdout."""
+    _, x_test, _, y_test = _holdout_split(
+        frame,
+        test_size=test_size,
+        random_state=random_state,
+    )
+    reports: list[pd.DataFrame] = []
+    for name, pipeline in fitted.items():
+        probabilities = pipeline.predict_proba(x_test)[:, 1]
+        report = error_analysis(
+            y_test,
+            probabilities,
+            threshold=threshold,
+            n_bins=n_bins,
+        )
+        report.insert(0, "model", name)
+        reports.append(report)
+
+    if not reports:
+        empty = error_analysis(
+            y_test,
+            np.zeros(len(y_test)),
+            threshold=threshold,
+            n_bins=n_bins,
+        )
+        return pd.DataFrame(columns=["model", *empty.columns])
+    return pd.concat(reports, ignore_index=True)
 
 
 def run_threshold_analysis(
