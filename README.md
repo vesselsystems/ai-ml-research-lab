@@ -47,11 +47,19 @@ ruff check .
 
 The full protocol, including controls and interpretation boundaries, is in [`reports/experiment_protocol.md`](reports/experiment_protocol.md). The model card is in [`reports/model_card.md`](reports/model_card.md). [`docs/methodology.md`](docs/methodology.md) explains the design in more detail.
 
-## Threshold and cost policy
+## Provenance evidence boundary
 
-The threshold grid is an analysis convention, not an operating policy. A probability of 0.5 is used only for the reported precision/recall/F1/accuracy convention; no production threshold is recommended. The dataset supplies neither a retention action nor business costs, so this repository does not invent them or report expected savings, ROI, or net benefit.
+[`data/provenance.json`](data/provenance.json) is the tracked provenance record. It pins the source URL and upstream revision and records measurements made from the currently available ignored `data/raw/telco_churn.csv`: its SHA-256, byte size, CSV header, and row count. Those measurements establish only the state of that local snapshot when recorded; they do not prove freshness, that an upstream response would be byte-identical, or that the data are representative.
 
-If a future, separately governed action is considered, its owner must define eligibility, capacity, and reviewed false-positive and false-negative costs before selecting a threshold. A supplied cost matrix can be applied to the exported counts using `loss = cost_false_positive * FP + cost_false_negative * FN`. Threshold selection must use training/validation data or a separate decision set, with the holdout reserved for confirmation. Until those inputs exist, the threshold and error tables are descriptive only.
+The retrieval date and license/permission review are explicitly `null`/`pending` in the record. This project therefore makes no retrieval-date, license, permission, or redistribution claim. The raw CSV remains untracked. `scripts/validate_provenance.py` performs local-only checks and never downloads; it validates recognized review statuses and timezone-aware ISO timestamps without filling missing facts. A missing file is unavailable evidence, a pending review is reported separately from a measured match, and any hash, size, schema, or row-count drift fails. `--allow-missing` and `--allow-pending` are explicit CI skips/allowances only; they never allow a mismatch. For a clean checkout, CI runs `python scripts/validate_provenance.py --allow-missing --allow-pending`.
+
+## Threshold and decision-policy boundary
+
+The threshold grid is an analysis convention, not an operating policy. `REPORTING_THRESHOLD = 0.5` is used only for the reported precision/recall/F1/accuracy and error-analysis conventions; no production threshold is recommended. The dataset supplies neither a retention action nor business costs, so this repository does not invent them or report expected savings, ROI, or net benefit.
+
+The versioned [decision-policy template](policies/decision_policy.v1.json) and its [boundary documentation](docs/decision_policy.md) make the missing inputs explicit. A future, separately governed action must supply an intended action, eligible population, `cost_unit`, hard capacity with an explicit period and `highest_score_then_input_order` selection rule, reviewed false-positive and false-negative costs, owner, non-expired review date, excluded-use list, schema/policy versions, and approval status. `policy_threshold_analysis` accepts only an explicitly supplied, approved policy and reports cost/capacity tradeoffs; it has no cost or capacity defaults. No approved policy is present here, so threshold selection remains blocked.
+
+The existing threshold, calibration, and error tables are descriptive reporting only. They do not select an operating threshold. If a policy is later approved, threshold selection must use training/validation data or a separate decision set, with the holdout reserved for confirmation. The policy cost expression is `total_cost = false_positive_cost * FP + false_negative_cost * FN`.
 
 ## Calibration and error analysis
 

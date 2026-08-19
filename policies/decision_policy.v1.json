@@ -1,0 +1,20 @@
+{
+  "policy_schema_version": 1,
+  "policy_version": "1.0",
+  "intended_action": null,
+  "eligible_population": null,
+  "capacity_constraints": {
+    "max_actions": null,
+    "period": null,
+    "selection_rule": null
+  },
+  "cost_unit": null,
+  "false_positive_cost": null,
+  "false_negative_cost": null,
+  "owner": null,
+  "review_date": null,
+  "excluded_uses": [],
+  "status": "draft",
+  "approved_by": null,
+  "approved_at": null
+}

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any
 
 import numpy as np
@@ -248,8 +249,8 @@ def run_experiments(
     ).items():
         cv_result = cross_validate(pipeline, x_train, y_train, cv=cv, scoring=scoring)
         pipeline.fit(x_train, y_train)
-        predictions = pipeline.predict(x_test)
         probabilities = pipeline.predict_proba(x_test)[:, 1]
+        predictions = (probabilities >= REPORTING_THRESHOLD).astype("int64")
         test_metrics = _metrics(y_test, predictions, probabilities)
         auc_low, auc_high = bootstrap_roc_auc_ci(
             y_test,
@@ -617,3 +618,35 @@ def run_threshold_analysis(
         ).columns
         return pd.DataFrame(columns=["model", *empty_columns])
     return pd.concat(reports, ignore_index=True)
+
+
+def policy_threshold_analysis(
+    y_true: pd.Series | np.ndarray,
+    probabilities: np.ndarray,
+    policy: Mapping[str, Any] | None = None,
+    thresholds: tuple[float, ...] = DEFAULT_THRESHOLDS,
+) -> pd.DataFrame:
+    """Run cost/capacity analysis through the explicit policy boundary."""
+    from .decision_policy import policy_threshold_analysis as _policy_threshold_analysis
+
+    return _policy_threshold_analysis(
+        y_true,
+        probabilities,
+        policy=policy,
+        thresholds=thresholds,
+    )
+
+
+def decision_policy_analysis(
+    y_true: pd.Series | np.ndarray,
+    probabilities: np.ndarray,
+    policy: Mapping[str, Any] | None = None,
+    thresholds: tuple[float, ...] = DEFAULT_THRESHOLDS,
+) -> pd.DataFrame:
+    """Alias for :func:`policy_threshold_analysis`."""
+    return policy_threshold_analysis(
+        y_true,
+        probabilities,
+        policy=policy,
+        thresholds=thresholds,
+    )

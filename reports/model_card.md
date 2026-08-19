@@ -25,6 +25,12 @@ Do not use these results to deny service, change eligibility or pricing, rank in
 
 The source is historical and its collection, label definition, representativeness, and consent context are not established by this project.
 
+### Provenance evidence boundary
+
+The tracked [`data/provenance.json`](../data/provenance.json) pins the URL and upstream commit and records the SHA-256, byte size, header columns, and row count measured from the ignored local CSV. This is evidence about that local snapshot only; it is not evidence of retrieval date, freshness, upstream byte identity, representativeness, or data quality beyond the recorded measurements. Retrieval date and license/permission review remain explicitly null or pending, so this card makes no license, permission, or redistribution claim.
+
+The raw CSV is not tracked. `scripts/validate_provenance.py` reads local files only and never downloads. A present file must match the recorded hash, size, schema, and row count; drift fails. A missing file is reported as unavailable evidence, and pending metadata is reported separately from a measured match. CI may explicitly allow those missing/pending states with `--allow-missing --allow-pending`, but neither flag permits a mismatch.
+
 ## Evaluation and current results
 
 Seed 42 produced one stratified 80/20 split. Five-fold stratified cross-validation was run on training rows only. The holdout was not used to fit preprocessing or tune a threshold. Metrics below are current holdout values; precision, recall, F1, and accuracy use threshold 0.5.
@@ -51,7 +57,7 @@ The intervals are percentile intervals from 500 bootstrap resamples of one holdo
 
 These are holdout diagnostics, not evidence that probabilities are calibrated for another population or a particular action. `reports/error_analysis.csv` reports threshold-0.5 confusion counts by score band without identifiers or feature values. At 0.5, logistic regression flagged 581 rows (288 false positives and 81 false negatives); the forest flagged 459 (201 false positives and 116 false negatives). The existing threshold table records the same tradeoff over fixed thresholds from 0.2 to 0.7.
 
-The threshold grid and 0.5 convention are reporting choices, not an operating policy. No action, capacity, or false-positive/false-negative cost is supplied. A future governed use would need those inputs and would select a threshold on training/validation data or a separate decision set before using the holdout for confirmation. The loss expression is `cost_false_positive * FP + cost_false_negative * FN`; this repository does not supply costs or claim business impact.
+The threshold grid and 0.5 convention are reporting choices, not an operating policy. No action, capacity period, deterministic selection rule, shared cost unit, or false-positive/false-negative cost is supplied. The versioned [decision-policy template](../policies/decision_policy.v1.json) records those missing inputs without changing this limitation. A future governed use would need those inputs, policy schema version 1, a non-expired review date, and timezone-aware approval evidence; it would select a threshold on training/validation data or a separate decision set before using the holdout for confirmation. The loss expression is `cost_false_positive * FP + cost_false_negative * FN`; this repository does not supply costs or claim business impact.
 
 ## Risks and limitations
 

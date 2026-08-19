@@ -16,6 +16,8 @@ This is a predictive comparison. It is not a test of a retention intervention an
 
 The file is a historical public dataset. The checksum makes this run identifiable; it does not establish that the data represent another population or that the labels are free of measurement bias.
 
+`data/provenance.json` is the tracked provenance boundary for the ignored input. Its URL and commit identify the pinned upstream reference; its SHA-256, byte size, header columns, and row count are measurements of the local `data/raw/telco_churn.csv` that was available when the record was made. They are not a retrieval receipt, freshness assertion, or proof that the upstream response was byte-identical. `retrieved_at_utc`, license/terms, and permission-review fields are explicitly null or pending because this project has not established those facts. The raw CSV is not committed. `scripts/validate_provenance.py` never downloads: with a local file it fails on hash, size, schema, or row-count drift; without one it reports unavailable evidence. `--allow-missing` and `--allow-pending` can explicitly permit only those unavailable/pending states in CI and never turn a mismatch into a pass.
+
 ## Fixed design
 
 - Random seed: 42.
@@ -27,7 +29,7 @@ The file is a historical public dataset. The checksum makes this run identifiabl
 - Uncertainty: 500 bootstrap resamples of the holdout for a percentile interval on ROC-AUC. Cross-validation spread is reported as the fold standard deviation.
 - Additional artifacts: `reports/threshold_analysis.csv` applies fixed thresholds 0.2, 0.3, 0.4, 0.5, 0.6, and 0.7 to the holdout and records confusion counts and thresholded metrics; `reports/calibration_analysis.csv` uses ten fixed equal-width probability bins; and `reports/error_analysis.csv` decomposes threshold-0.5 errors by score band. None of these artifacts selects an operating threshold or fits a calibration model.
 
-No hyperparameter search, recalibration, or threshold tuning was performed against the holdout. The threshold grid is a descriptive convention. No action, capacity, or business cost is provided; a future threshold must be selected with a reviewed action and supplied false-positive/false-negative costs on training/validation data or a separate decision set. Run `python scripts/run_experiment.py` after downloading the CSV to regenerate the machine-readable summaries.
+No hyperparameter search, recalibration, or threshold tuning was performed against the holdout. The threshold grid and `REPORTING_THRESHOLD = 0.5` are descriptive conventions. No action, owner, approval, capacity period, selection rule, cost unit, or business cost is provided, so threshold selection remains blocked. The versioned [decision-policy template](../policies/decision_policy.v1.json) records the inputs required for a future governed analysis; its separate policy helper accepts only policy schema version 1, a non-expired review date, an explicit `highest_score_then_input_order` capacity rule, and an approved policy with supplied costs. It does not invent costs or capacity. A future threshold must be selected with supplied false-positive/false-negative costs on training/validation data or a separate decision set. Run `python scripts/run_experiment.py` after downloading the CSV to regenerate the machine-readable summaries.
 
 ## Hypothesis
 

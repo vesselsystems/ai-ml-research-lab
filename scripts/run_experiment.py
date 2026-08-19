@@ -12,6 +12,7 @@ from ai_ml_research_lab.experiment import (
     run_experiments,
     run_threshold_analysis,
 )
+from ai_ml_research_lab.provenance import ProvenanceMetadataError, validate_provenance
 
 if __name__ == "__main__":
     root = Path(__file__).parents[1]
@@ -22,6 +23,23 @@ if __name__ == "__main__":
         raise SystemExit(
             f"Missing {source}. Run `python scripts/download_data.py` first "
             "(the raw CSV is intentionally not tracked)."
+        )
+
+    try:
+        provenance_result = validate_provenance(
+            root / "data" / "provenance.json",
+            raw_path=source,
+            project_root=root,
+        )
+    except ProvenanceMetadataError as error:
+        raise SystemExit(f"Invalid tracked provenance metadata: {error}") from error
+    if not provenance_result.measurements_match:
+        detail = "; ".join(provenance_result.errors) or "snapshot measurements do not match"
+        raise SystemExit(f"Refusing to analyze an unverified local snapshot: {detail}")
+    if provenance_result.metadata_pending:
+        print(
+            "WARNING: local snapshot measurements match, but provenance review remains "
+            f"pending: {', '.join(provenance_result.pending_metadata)}"
         )
 
     frame = load_dataset(source)

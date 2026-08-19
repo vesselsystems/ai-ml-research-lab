@@ -1,0 +1,46 @@
+{
+  "provenance_schema_version": 1,
+  "source": {
+    "publisher": "IBM telco-customer-churn-on-icp4d repository",
+    "url": "https://raw.githubusercontent.com/IBM/telco-customer-churn-on-icp4d/d5371f5d83a446ad5673cbcca3b814b926491f8a/data/Telco-Customer-Churn.csv",
+    "upstream_ref": "d5371f5d83a446ad5673cbcca3b814b926491f8a",
+    "revision": "d5371f5d83a446ad5673cbcca3b814b926491f8a",
+    "retrieval_script": "scripts/download_data.py",
+    "license_or_terms": null,
+    "license_or_terms_url": null,
+    "license_review_status": "pending",
+    "permission_review": null,
+    "permission_review_status": "pending"
+  },
+  "local_snapshot": {
+    "path": "data/raw/telco_churn.csv",
+    "sha256": "16320c9c1ec72448db59aa0a26a0b95401046bef5d02fd3aeb906448e3055e91",
+    "size_bytes": 970457,
+    "source_columns": [
+      "customerID",
+      "gender",
+      "SeniorCitizen",
+      "Partner",
+      "Dependents",
+      "tenure",
+      "PhoneService",
+      "MultipleLines",
+      "InternetService",
+      "OnlineSecurity",
+      "OnlineBackup",
+      "DeviceProtection",
+      "TechSupport",
+      "StreamingTV",
+      "StreamingMovies",
+      "Contract",
+      "PaperlessBilling",
+      "PaymentMethod",
+      "MonthlyCharges",
+      "TotalCharges",
+      "Churn"
+    ],
+    "row_count": 7043,
+    "retrieved_at_utc": null,
+    "retrieval_date_status": "pending"
+  }
+}
