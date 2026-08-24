@@ -13,7 +13,7 @@ This card describes the three candidates evaluated in this repository: a majorit
 
 ## Excluded use
 
-Do not use these results to deny service, change eligibility or pricing, rank individual customers for treatment, or claim that outreach will prevent churn. Do not treat a score as a causal effect, a fairness assessment, or evidence of performance on a different customer population. The repository does not establish an appropriate action, cost matrix, consent basis, or governance process.
+Do not use these results to deny service, change eligibility or pricing, rank individual customers for treatment, or claim that outreach will prevent churn. Do not treat a score as a causal effect, a fairness assessment, or evidence of performance on a different customer population. The repository does not establish an appropriate action, cost matrix, consent basis, or governance process. Resolving the pending license/terms and permission review is a prerequisite for redistribution or operational use, even if a future decision policy is approved.
 
 ## Data and provenance
 
@@ -23,7 +23,7 @@ Do not use these results to deny service, change eligibility or pricing, rank in
 - **Processing:** `customerID` is excluded. `Churn` is mapped from `Yes`/`No`. `TotalCharges` is parsed as numeric; 11 blank/unparseable values in this file become missing and are imputed. Other numeric features use median imputation and scaling; categorical features use most-frequent imputation and one-hot encoding.
 - **Access:** the raw CSV is ignored by Git and is downloaded by `scripts/download_data.py`; CI uses an in-memory test fixture instead.
 
-The source is historical and its collection, label definition, representativeness, and consent context are not established by this project.
+The source is historical and its collection, label definition, representativeness, and consent context are not established by this project. Retrieval date, license/terms, and permission review remain pending; a matching checksum is not a substitute for those human reviews.
 
 ### Provenance evidence boundary
 
