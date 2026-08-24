@@ -4,7 +4,10 @@
 an action that might be considered separately from this offline model study. It
 is intentionally a **draft**: its `null` values are required inputs, not
 suggested defaults. No completed or approved policy is checked into this
-repository.
+repository. An approved policy would be necessary but not sufficient: pending
+retrieval, license/terms, permission, privacy, or consent review would still
+block redistribution or operational use. This helper does not resolve those
+reviews.
 
 ## Required policy record
 

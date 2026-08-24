@@ -6,6 +6,10 @@ This repository asks a narrow question: on the IBM Telco Customer Churn CSV, doe
 
 The result is an offline experiment. It does not estimate the effect of a retention action, test an intervention, or support decisions about individual customers.
 
+## Current status and remaining work
+
+The comparison, reproducible preprocessing, descriptive threshold/calibration/error reports, model card, and local tests are complete for this research scope. Retrieval date, license/terms, permission, privacy, fairness, temporal validation, intervention, and policy approval remain pending or out of scope. The checked-in decision policy is a draft template, not an approved operating policy.
+
 ## Current result
 
 The current run used seed 42, a stratified 80/20 split, and five-fold stratified cross-validation on the training rows. Values below are from the 1,409-row holdout; the positive rate in that holdout is 26.54%.
@@ -39,7 +43,7 @@ ruff check .
 
 ## Data and method
 
-- **Source:** [IBM Telco Customer Churn CSV](https://raw.githubusercontent.com/IBM/telco-customer-churn-on-icp4d/d5371f5d83a446ad5673cbcca3b814b926491f8a/data/Telco-Customer-Churn.csv), pinned to commit `d5371f5d83a446ad5673cbcca3b814b926491f8a`, 7,043 rows in the current local file.
+- **Source:** [IBM Telco Customer Churn CSV](https://raw.githubusercontent.com/IBM/telco-customer-churn-on-icp4d/d5371f5d83a446ad5673cbcca3b814b926491f8a/data/Telco-Customer-Churn.csv), referenced at commit `d5371f5d83a446ad5673cbcca3b814b926491f8a`, 7,043 rows in the current local file.
 - **Label:** `Churn=Yes` is 1 and `Churn=No` is 0; the full-file positive rate is 26.54%.
 - **Features:** `customerID` is removed. Numeric values use median imputation and scaling; categorical values use most-frequent imputation and one-hot encoding. `TotalCharges` is parsed as numeric, with blank values becoming missing values for imputation.
 - **Candidates:** a majority-class `DummyClassifier`, class-weighted logistic regression, and a class-weighted random forest. The majority classifier is a reference point, not a useful churn scorer.
@@ -51,7 +55,7 @@ The full protocol, including controls and interpretation boundaries, is in [`rep
 
 [`data/provenance.json`](data/provenance.json) is the tracked provenance record. It pins the source URL and upstream revision and records measurements made from the currently available ignored `data/raw/telco_churn.csv`: its SHA-256, byte size, CSV header, and row count. Those measurements establish only the state of that local snapshot when recorded; they do not prove freshness, that an upstream response would be byte-identical, or that the data are representative.
 
-The retrieval date and license/permission review are explicitly `null`/`pending` in the record. This project therefore makes no retrieval-date, license, permission, or redistribution claim. The raw CSV remains untracked. `scripts/validate_provenance.py` performs local-only checks and never downloads; it validates recognized review statuses and timezone-aware ISO timestamps without filling missing facts. A missing file is unavailable evidence, a pending review is reported separately from a measured match, and any hash, size, schema, or row-count drift fails. `--allow-missing` and `--allow-pending` are explicit CI skips/allowances only; they never allow a mismatch. For a clean checkout, CI runs `python scripts/validate_provenance.py --allow-missing --allow-pending`.
+The retrieval date and license/permission review are explicitly `null`/`pending` in the record. This project therefore makes no retrieval-date, license, permission, or redistribution claim. The raw CSV remains untracked. A matching local snapshot may be analyzed as conditional research evidence, but pending terms and permission review still block redistribution or operational use. `scripts/validate_provenance.py` performs local-only checks and never downloads; it validates recognized review statuses and timezone-aware ISO timestamps without filling missing facts. A missing file is unavailable evidence, a pending review is reported separately from a measured match, and any hash, size, schema, or row-count drift fails. `--allow-missing` and `--allow-pending` are explicit CI skips/allowances only; they never allow a mismatch. For a clean checkout, CI runs `python scripts/validate_provenance.py --allow-missing --allow-pending`.
 
 ## Threshold and decision-policy boundary
 
