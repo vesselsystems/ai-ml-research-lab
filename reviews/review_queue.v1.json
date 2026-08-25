@@ -1,0 +1,68 @@
+{
+  "review_queue_schema_version": 1,
+  "reviews": [
+    {
+      "id": "retrieval-date",
+      "question": "What is the verified UTC retrieval date of the pinned source snapshot?",
+      "evidence_refs": [
+        "data/provenance.json",
+        "scripts/download_data.py"
+      ],
+      "status": "pending",
+      "decision": null,
+      "reviewer": null,
+      "reviewed_at_utc": null,
+      "rationale": null,
+      "notes": [],
+      "blocks": []
+    },
+    {
+      "id": "license-terms",
+      "question": "Do the source dataset license or publisher terms permit the intended research handling and any proposed redistribution?",
+      "evidence_refs": [
+        "data/provenance.json",
+        "README.md"
+      ],
+      "status": "pending",
+      "decision": null,
+      "reviewer": null,
+      "reviewed_at_utc": null,
+      "rationale": null,
+      "notes": [],
+      "blocks": []
+    },
+    {
+      "id": "permission",
+      "question": "Has permission for the intended research handling and any proposed redistribution or use been established?",
+      "evidence_refs": [
+        "data/provenance.json",
+        "README.md",
+        "docs/methodology.md"
+      ],
+      "status": "pending",
+      "decision": null,
+      "reviewer": null,
+      "reviewed_at_utc": null,
+      "rationale": null,
+      "notes": [],
+      "blocks": []
+    },
+    {
+      "id": "operational-use",
+      "question": "Has a specific operational use been separately approved with an owner, action, eligible population, policy reference, and any expiry or review conditions?",
+      "evidence_refs": [
+        "README.md",
+        "docs/decision_policy.md",
+        "policies/decision_policy.v1.json",
+        "reports/model_card.md"
+      ],
+      "status": "pending",
+      "decision": null,
+      "reviewer": null,
+      "reviewed_at_utc": null,
+      "rationale": null,
+      "notes": [],
+      "blocks": []
+    }
+  ]
+}
