@@ -408,3 +408,48 @@ def test_policy_analysis_rejects_malformed_values(
 
     with pytest.raises(ValueError, match=message):
         validate_decision_policy(policy)
+
+
+def test_paired_bootstrap_auc_difference_is_zero_for_identical_scores() -> None:
+    from ai_ml_research_lab.experiment import paired_bootstrap_auc_difference
+
+    rng = np.random.default_rng(0)
+    y = rng.integers(0, 2, 200)
+    scores = rng.random(200)
+
+    result = paired_bootstrap_auc_difference(y, scores, scores, n_bootstraps=200)
+
+    assert result["difference"] == 0.0
+    assert result["ci_low"] == result["ci_high"] == 0.0
+    assert result["share_first_higher"] == 0.0
+
+
+def test_paired_bootstrap_auc_difference_detects_a_better_model() -> None:
+    from ai_ml_research_lab.experiment import paired_bootstrap_auc_difference
+
+    rng = np.random.default_rng(1)
+    y = rng.integers(0, 2, 400)
+    informative = y + rng.normal(0, 0.5, 400)  # strongly related to the label
+    noise = rng.random(400)
+
+    result = paired_bootstrap_auc_difference(
+        y, 1 / (1 + np.exp(-informative)), noise, n_bootstraps=300
+    )
+
+    assert result["difference"] > 0.3
+    assert result["ci_low"] > 0
+    assert result["share_first_higher"] == 1.0
+    # The same seed gives the same interval.
+    again = paired_bootstrap_auc_difference(
+        y, 1 / (1 + np.exp(-informative)), noise, n_bootstraps=300
+    )
+    assert again == result
+
+
+def test_paired_bootstrap_auc_difference_rejects_mismatched_inputs() -> None:
+    from ai_ml_research_lab.experiment import paired_bootstrap_auc_difference
+
+    with pytest.raises(ValueError):
+        paired_bootstrap_auc_difference([0, 1, 1], [0.1, 0.9, 0.8], [0.2, 0.7])
+    with pytest.raises(ValueError):
+        paired_bootstrap_auc_difference([0, 1], [0.1, 0.9], [0.2, 0.7], n_bootstraps=0)

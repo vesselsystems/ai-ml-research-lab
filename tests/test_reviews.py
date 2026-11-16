@@ -44,7 +44,26 @@ def _approved_policy() -> dict[str, object]:
     }
 
 
+def _inside_git_work_tree() -> bool:
+    try:
+        completed = subprocess.run(
+            ["git", "rev-parse", "--is-inside-work-tree"],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except OSError:
+        return False
+    return completed.returncode == 0 and completed.stdout.strip() == "true"
+
+
 def _run(queue: Path, *arguments: str) -> subprocess.CompletedProcess[str]:
+    # The validator deliberately fails closed when git cannot prove that evidence
+    # files are tracked. A ZIP download or a container without git has no such
+    # metadata, so these end-to-end checks skip there instead of failing.
+    if not _inside_git_work_tree():
+        pytest.skip("validator requires a git work tree to check tracked evidence files")
     return subprocess.run(
         [sys.executable, str(SCRIPT_PATH), "--queue", str(queue), *arguments],
         cwd=REPO_ROOT,

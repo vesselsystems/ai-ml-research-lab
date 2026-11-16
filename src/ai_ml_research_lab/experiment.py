@@ -135,6 +135,48 @@ def bootstrap_roc_auc_ci(
     return float(low), float(high)
 
 
+def paired_bootstrap_auc_difference(
+    y_true: pd.Series | np.ndarray,
+    first_scores: np.ndarray,
+    second_scores: np.ndarray,
+    n_bootstraps: int = 1_000,
+    random_state: int = RANDOM_STATE,
+) -> dict[str, float | int]:
+    """Bootstrap the ROC-AUC difference (first minus second) on shared rows.
+
+    Both models are scored on the same holdout rows, so their AUCs are correlated.
+    Comparing two separate per-model intervals ignores that correlation; resampling
+    rows once and recomputing both AUCs on each resample keeps the pairing. Returns
+    the observed difference, a percentile interval, and the share of resamples in
+    which the first model's AUC is higher.
+    """
+    y_array, first = _validate_binary_scores(y_true, first_scores)
+    _, second = _validate_binary_scores(y_true, second_scores)
+    if len(first) != len(second):
+        raise ValueError("score arrays must have the same length")
+    if n_bootstraps < 1:
+        raise ValueError("n_bootstraps must be positive")
+    rng = np.random.default_rng(random_state)
+    differences: list[float] = []
+    for _ in range(n_bootstraps):
+        indices = rng.integers(0, len(y_array), len(y_array))
+        sample_y = y_array[indices]
+        if len(np.unique(sample_y)) < 2:
+            continue
+        differences.append(
+            roc_auc_score(sample_y, first[indices]) - roc_auc_score(sample_y, second[indices])
+        )
+    observed = roc_auc_score(y_array, first) - roc_auc_score(y_array, second)
+    low, high = np.percentile(differences, [2.5, 97.5])
+    return {
+        "difference": float(observed),
+        "ci_low": float(low),
+        "ci_high": float(high),
+        "share_first_higher": float(np.mean(np.asarray(differences) > 0)),
+        "resamples": len(differences),
+    }
+
+
 def _validate_binary_scores(
     y_true: pd.Series | np.ndarray,
     probabilities: np.ndarray,
