@@ -47,7 +47,7 @@ That regenerates `model_comparison.csv`, `metrics.json`, `threshold_analysis.csv
 
 ## Tests and CI
 
-49 tests plus Ruff, on Python 3.11 and 3.12. CI does not need the CSV.
+52 tests plus Ruff, on Python 3.11 and 3.12. CI does not need the CSV.
 
 ```bash
 pytest
